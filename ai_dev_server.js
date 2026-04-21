@@ -128,7 +128,8 @@ function handleSnapshotPost(req, res) {
     try {
       const data = JSON.parse(body);
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `snapshot_${timestamp}.html`;
+      const rand = Math.random().toString(36).substring(2, 6);
+      const filename = `snapshot_${timestamp}_${rand}.html`;
       const filepath = path.join(SNAPSHOT_DIR, filename);
 
       // Save HTML with inline styles
