@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Batch Deterministic Demo (Auto)</title>
+  <style>
+    body { font-family: sans-serif; background: #222; color: #fff; display: flex; flex-direction: column; align-items: center; padding-top: 20px; }
+    canvas { background: #000; border: 2px solid #555; }
+    button { padding: 10px 20px; font-size: 16px; margin: 10px; cursor: pointer; }
+    #status { color: #0f0; font-weight: bold; height: 20px; margin: 10px; }
+    video { margin-top: 20px; border: 2px solid #0f0; max-width: 400px; }
+  </style>
+</head>
+<body>
+
+  <h1>Batch nextFrame() Demo (Auto-Ready)</h1>
+  <button id="run-btn">AIの指示を一括実行 & 録画</button>
+  <div id="status">AIの指示を待機中...</div>
+  <canvas id="game" width="400" height="300"></canvas>
+  <div id="video-container"></div>
+
+  <script>
+    const API = location.origin;
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const videoContainer = document.getElementById('video-container');
+    const btn = document.getElementById('run-btn');
+
+    let state = {
+      frame: 0,
+      player: { x: 50, y: 250, vy: 0 },
+      obstacles: [{ x: 400, w: 30, h: 40 }],
+      gravity: 0.8,
+      jumpPower: -12,
+      groundY: 250,
+      speed: 5,
+      gameOver: false
+    };
+
+    function draw() {
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#444';
+      ctx.fillRect(0, state.groundY + 20, canvas.width, canvas.height - state.groundY);
+      ctx.fillStyle = '#f00';
+      state.obstacles.forEach(ob => ctx.fillRect(ob.x, state.groundY + 20 - ob.h, ob.w, ob.h));
+      ctx.fillStyle = state.gameOver ? '#555' : '#0f0';
+      ctx.fillRect(state.player.x, state.player.y, 20, 20);
+      ctx.fillStyle = '#fff';
+      ctx.font = '16px monospace';
+      ctx.fillText(`Frame: ${state.frame}`, 10, 20);
+    }
+
+    const aiInputs = Array(100).fill({ jump: false });
+    aiInputs[30] = { jump: true };
+
+    async function runBatch() {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      videoContainer.innerHTML = '';
+      
+      statusEl.textContent = '● 録画開始...';
+      await fetch(API + '/record/start', { method: 'POST' });
+
+      for (let i = 0; i < 100; i++) {
+        if (state.gameOver) break;
+        const input = aiInputs[i];
+        if (input.jump && state.player.y >= state.groundY) state.player.vy = state.jumpPower;
+        state.player.vy += state.gravity;
+        state.player.y += state.player.vy;
+        if (state.player.y > state.groundY) { state.player.y = state.groundY; state.player.vy = 0; }
+        state.obstacles.forEach(ob => ob.x -= state.speed);
+        state.frame++;
+        draw();
+        const dataURL = canvas.toDataURL('image/jpeg', 0.8);
+        await fetch(API + '/frame', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: dataURL })
+        });
+      }
+
+      statusEl.textContent = '● 動画エンコード中...';
+      const res = await fetch(API + '/record/stop', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        statusEl.textContent = '✅ 動画生成完了！';
+        videoContainer.innerHTML = `<h3>Generated AI Simulation:</h3><video src="${API}/videos/${data.file}" autoplay loop controls></video>`;
+      } else {
+        statusEl.textContent = '❌ エラー: ' + data.error;
+      }
+      btn.disabled = false;
+    }
+
+    // AIからの命令を待受
+    async function poll() {
+      try {
+        const res = await fetch(API + '/input/pending');
+        const json = await res.json();
+        if (json.hasCommand && json.command.action === 'eval') {
+          console.log("AI Command received:", json.command.code);
+          eval(json.command.code);
+        }
+      } catch (e) {}
+      setTimeout(poll, 100);
+    }
+
+    btn.addEventListener('click', runBatch);
+    draw();
+    poll(); // ポーリング開始
+  </script>
+</body>
+</html>

@@ -37,7 +37,7 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 async function runTests() {
   console.log('=== Stress Tests ===\n');
 
-  serverProc = spawn('node', ['ai_dev_server.js'], {
+  serverProc = spawn('node', ['ai-dev-server.js'], {
     env: { ...process.env, PORT: PORT, LOG_FILE: 'stress_test.log', SNAPSHOT_DIR: './stress_snapshots' },
     stdio: ['ignore', 'pipe', 'pipe']
   });

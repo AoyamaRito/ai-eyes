@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Slow Motion Debug Maze</title>
+  <style>
+    body { font-family: 'Courier New', Courier, monospace; background: #1a1a1a; color: #0f0; display: flex; flex-direction: column; align-items: center; padding-top: 20px; }
+    canvas { background: #000; border: 2px solid #0f0; box-shadow: 0 0 20px rgba(0, 255, 0, 0.2); image-rendering: pixelated; }
+    .info { margin: 10px; padding: 10px; border: 1px solid #333; background: #000; width: 400px; font-size: 14px; }
+    .label { color: #888; }
+    #status { font-weight: bold; color: #ff0; }
+  </style>
+</head>
+<body>
+
+  <h1>Slow-Mo Debug Maze</h1>
+  <div class="info">
+    <div><span class="label">Status:</span> <span id="status">Waiting for AI...</span></div>
+    <div><span class="label">Position:</span> <span id="pos">1, 1</span></div>
+    <div><span class="label">Step Count:</span> <span id="steps">0</span></div>
+  </div>
+  <canvas id="maze" width="400" height="400"></canvas>
+
+  <script>
+    const API = 'http://localhost:3000';
+    const canvas = document.getElementById('maze');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const posEl = document.getElementById('pos');
+    const stepsEl = document.getElementById('steps');
+
+    const SIZE = 11; 
+    const CELL_W = canvas.width / SIZE;
+    const CELL_H = canvas.height / SIZE;
+
+    let player = { x: 1, y: 1 };
+    let stepCount = 0;
+    let grid = [
+      [1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,1,0,0,0,0,0,1],
+      [1,1,1,0,1,0,1,1,1,0,1],
+      [1,0,0,0,0,0,1,0,0,0,1],
+      [1,0,1,1,1,1,1,0,1,1,1],
+      [1,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,0,1,1,1,0,1],
+      [1,0,0,0,1,0,0,0,1,0,1],
+      [1,0,1,0,1,1,1,0,1,0,1],
+      [1,0,0,0,0,0,0,0,1,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1]
+    ];
+    const GOAL = { x: 9, y: 9 };
+
+    function draw() {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+          if (grid[y][x] === 1) {
+            ctx.fillStyle = '#333';
+            ctx.fillRect(x * CELL_W, y * CELL_H, CELL_W, CELL_H);
+          }
+        }
+      }
+
+      // Goal
+      ctx.fillStyle = '#f00';
+      ctx.fillRect(GOAL.x * CELL_W + 5, GOAL.y * CELL_H + 5, CELL_W - 10, CELL_H - 10);
+
+      // Player
+      ctx.fillStyle = '#0f0';
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#0f0';
+      ctx.fillRect(player.x * CELL_W + 8, player.y * CELL_H + 8, CELL_W - 16, CELL_H - 16);
+      ctx.shadowBlur = 0;
+
+      posEl.textContent = `${player.x}, ${player.y}`;
+      stepsEl.textContent = stepCount;
+    }
+
+    // AIが外部から呼ぶ関数
+    window.move = async function(dx, dy) {
+      const nx = player.x + dx;
+      const ny = player.y + dy;
+      
+      if (grid[ny][nx] === 0) {
+        player.x = nx;
+        player.y = ny;
+        stepCount++;
+        statusEl.textContent = `Moved to ${nx}, ${ny}`;
+      } else {
+        statusEl.textContent = `Blocked at ${nx}, ${ny}!`;
+      }
+      
+      draw();
+
+      // 移動のたびにスナップショットを送信
+      await fetch(API + '/snapshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          html: document.body.innerHTML,
+          url: location.href,
+          error: statusEl.textContent,
+          label: `step_${stepCount}`
+        })
+      });
+
+      // 同時に映像フレームも送る（動画としても残すため）
+      const dataURL = canvas.toDataURL('image/png');
+      await fetch(API + '/frame', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataURL })
+      });
+
+      return { x: player.x, y: player.y, goal: player.x === GOAL.x && player.y === GOAL.y };
+    };
+
+    // ポーリングしてAIからの指示を待つ
+    async function poll() {
+      try {
+        const res = await fetch(API + '/input/pending');
+        const json = await res.json();
+        if (json.hasCommand) {
+          const cmd = json.command;
+          if (cmd.action === 'eval') {
+            // evalでwindow.moveなどを実行
+            const result = await eval(cmd.code);
+            console.log('Command executed:', cmd.code, result);
+          }
+        }
+      } catch (e) {
+        console.error('Polling error:', e);
+      }
+      setTimeout(poll, 100); 
+    }
+
+    draw();
+    poll();
+  </script>
+</body>
+</html>

@@ -1,9 +1,10 @@
 {
   "name": "ai-dev-server",
   "version": "0.3.0",
-  "bin": { "ai-dev-server": "./ai_dev_server.js" },
+  "bin": { "ai-dev-server": "./ai-dev-server.js" },
   "scripts": {
-    "start": "node ai_dev_server.js",
-    "test": "node ai_dev_server.js --test"
+    "start": "node ai-dev-server.js",
+    "test": "node ai-dev-server.js --test",
+    "test:e2e": "node test_e2e.js"
   }
 }

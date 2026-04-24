@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Slow-Mo Action Debugger</title>
+  <style>
+    body { font-family: sans-serif; background: #222; color: #fff; display: flex; flex-direction: column; align-items: center; padding-top: 20px; }
+    canvas { background: #000; border: 2px solid #555; }
+    .info { margin: 10px; font-family: monospace; font-size: 16px; color: #0f0; }
+    #status { color: #ff0; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <h1>Slow-Mo Action Debugger</h1>
+  <div class="info">Frame: <span id="frame-count">0</span> | Status: <span id="status">Waiting for CLI...</span></div>
+  <canvas id="game" width="400" height="300"></canvas>
+
+  <script>
+    const API = location.origin;
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const frameCountEl = document.getElementById('frame-count');
+    const statusEl = document.getElementById('status');
+
+    let state = {
+      frame: 0,
+      player: { x: 50, y: 250, vy: 0 },
+      obstacles: [{ x: 400, w: 30, h: 40 }],
+      gravity: 0.8,
+      jumpPower: -12,
+      groundY: 250,
+      speed: 5,
+      gameOver: false
+    };
+
+    function draw() {
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#444';
+      ctx.fillRect(0, state.groundY + 20, canvas.width, canvas.height - state.groundY);
+      
+      // 障害物
+      ctx.fillStyle = '#f00';
+      state.obstacles.forEach(ob => ctx.fillRect(ob.x, state.groundY + 20 - ob.h, ob.w, ob.h));
+      
+      // プレイヤー
+      ctx.fillStyle = state.gameOver ? '#555' : '#0f0';
+      ctx.fillRect(state.player.x, state.player.y, 20, 20);
+      
+      frameCountEl.textContent = state.frame;
+      
+      // 当たり判定の可視化（デバッグ用）
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(state.player.x, state.player.y, 20, 20);
+      state.obstacles.forEach(ob => ctx.strokeRect(ob.x, state.groundY + 20 - ob.h, ob.w, ob.h));
+    }
+
+    // CLIから呼ばれる関数（1コマ進める）
+    window.stepFrame = async function(jump) {
+      if (state.gameOver) {
+        statusEl.textContent = 'Game Over';
+        return { ok: true, status: 'game_over' };
+      }
+
+      statusEl.textContent = `Processing Frame ${state.frame + 1}...`;
+
+      if (jump && state.player.y >= state.groundY) state.player.vy = state.jumpPower;
+      
+      state.player.vy += state.gravity;
+      state.player.y += state.player.vy;
+      if (state.player.y > state.groundY) { state.player.y = state.groundY; state.player.vy = 0; }
+      
+      state.obstacles.forEach(ob => ob.x -= state.speed);
+
+      // 当たり判定
+      const p = { x: state.player.x, y: state.player.y, w: 20, h: 20 };
+      state.obstacles.forEach(ob => {
+        const o = { x: ob.x, y: state.groundY + 20 - ob.h, w: ob.w, h: ob.h };
+        if (p.x < o.x + o.w && p.x + p.w > o.x && p.y < o.y + o.h && p.y + p.h > o.y) {
+          state.gameOver = true;
+        }
+      });
+
+      state.frame++;
+      draw();
+      statusEl.textContent = 'Waiting for CLI...';
+
+      return { ok: true, status: state.gameOver ? 'game_over' : 'running', playerY: state.player.y, obstacleX: state.obstacles[0].x };
+    };
+
+    // CLIからの指示を待機
+    async function poll() {
+      try {
+        const res = await fetch(API + '/input/pending');
+        const json = await res.json();
+        if (json.hasCommand && json.command.action === 'eval') {
+          // Promiseを返すevalを実行し、完了を待つ
+          const result = await eval(json.command.code);
+          // 結果をサーバーのログに返す（デバッグ確認用）
+          await fetch(API + '/error', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ type: 'sync', message: JSON.stringify(result) })
+          });
+        }
+      } catch (e) {}
+      setTimeout(poll, 100);
+    }
+
+    draw();
+    poll();
+  </script>
+</body>
+</html>

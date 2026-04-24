@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Debug Video Player</title>
+  <style>
+    body { font-family: sans-serif; background: #1a1a1a; color: #fff; display: flex; flex-direction: column; align-items: center; padding-top: 40px; }
+    .container { background: #222; padding: 20px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #333; }
+    video { border: 2px solid #0f0; border-radius: 4px; background: #000; width: 640px; }
+    h1 { font-size: 20px; margin-bottom: 20px; color: #0f0; font-family: monospace; }
+    .meta { margin-top: 15px; font-size: 14px; color: #888; font-family: monospace; }
+    a { color: #0f0; text-decoration: none; border: 1px solid #0f0; padding: 5px 10px; border-radius: 4px; transition: 0.2s; }
+    a:hover { background: #0f0; color: #000; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1 id="title">🎥 AI Simulation Results</h1>
+    <video id="v" autoplay loop controls></video>
+    <div class="meta">
+      <p>File: <span id="filename">-</span></p>
+      <p><a id="dl" href="#" download>Download MP4</a></p>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const videoFile = params.get('video');
+    if (videoFile) {
+      const videoPath = `/videos/${videoFile}`;
+      const v = document.getElementById('v');
+      v.src = videoPath;
+      document.getElementById('filename').textContent = videoFile;
+      document.getElementById('dl').href = videoPath;
+      document.title = "Debug: " + videoFile;
+    } else {
+      document.getElementById('title').textContent = "No Video Selected";
+    }
+  </script>
+</body>
+</html>

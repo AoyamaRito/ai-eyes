@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>AI-Dev-Server Experiment</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .card { border: 1px solid #ccc; padding: 20px; border-radius: 8px; max-width: 300px; }
+        input { width: 50px; margin: 5px; }
+        #result { font-weight: bold; color: blue; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h3>足し算アプリ</h3>
+        <input type="number" id="a" value="0"> + 
+        <input type="number" id="b" value="0">
+        <button id="calc-btn">計算</button>
+        <p>結果: <span id="result">-</span></p>
+    </div>
+
+    <script>
+        // アプリのロジック
+        document.getElementById('calc-btn').onclick = () => {
+            const a = parseInt(document.getElementById('a').value);
+            const b = parseInt(document.getElementById('b').value);
+            document.getElementById('result').innerText = a + b;
+        };
+
+        // ai-dev-server ClientSnippet (リモコン受光部)
+        (function() {
+            const SERVER = 'http://localhost:3000';
+            setInterval(() => {
+                fetch(SERVER + '/input/pending')
+                    .then(r => r.json())
+                    .then(data => {
+                        if (!data.hasCommand) return;
+                        const cmd = data.command;
+                        console.log('[Remote] Executing:', cmd.action);
+                        if (cmd.action === 'eval') {
+                            eval(cmd.code);
+                        } else if (cmd.action === 'click') {
+                            document.querySelector(cmd.target)?.click();
+                        } else if (cmd.action === 'type') {
+                            const el = document.querySelector(cmd.target);
+                            if (el) { 
+                                el.value = cmd.value; 
+                                el.dispatchEvent(new Event('input', { bubbles: true })); 
+                                el.dispatchEvent(new Event('change', { bubbles: true })); 
+                            }
+                        }
+                    }).catch(() => {});
+            }, 500); // 実験用なので0.5秒間隔
+        })();
+    </script>
+</body>
+</html>

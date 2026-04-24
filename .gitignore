@@ -3,3 +3,7 @@ node_modules/
 snapshots/
 test_snapshots/
 test_error.log
+node_modules/
+snapshots/
+temp_node_frames/
+.DS_Store

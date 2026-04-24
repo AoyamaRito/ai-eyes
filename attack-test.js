@@ -39,7 +39,7 @@ async function runTests() {
   console.log('=== Attack Tests ===\n');
 
   // Start server
-  serverProc = spawn('node', ['ai_dev_server.js'], {
+  serverProc = spawn('node', ['ai-dev-server.js'], {
     env: { ...process.env, PORT: PORT, LOG_FILE: 'attack_test.log', SNAPSHOT_DIR: './attack_snapshots' },
     stdio: ['ignore', 'pipe', 'pipe']
   });

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Maze Solver & Recorder</title>
+  <style>
+    body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background: #222; color: #fff; margin-top: 20px; }
+    canvas { background: #000; box-shadow: 0 0 10px rgba(0,0,0,0.5); image-rendering: pixelated; }
+    button { padding: 10px 20px; font-size: 16px; margin: 10px; cursor: pointer; }
+    #video-container { margin-top: 20px; }
+    video { max-width: 400px; border: 2px solid #555; }
+    #status { margin: 10px; font-weight: bold; color: #0f0; }
+  </style>
+</head>
+<body>
+
+  <h1>迷路自動探索 & 録画デモ</h1>
+  <button id="start-btn">迷路生成 ＆ 探索開始（録画）</button>
+  <div id="status">待機中...</div>
+  <canvas id="maze" width="400" height="400"></canvas>
+  <div id="video-container"></div>
+
+  <script>
+    const API = 'http://localhost:3000';
+    const canvas = document.getElementById('maze');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const videoContainer = document.getElementById('video-container');
+    const startBtn = document.getElementById('start-btn');
+
+    const SIZE = 21; // 奇数であること
+    const CELL_W = canvas.width / SIZE;
+    const CELL_H = canvas.height / SIZE;
+
+    let grid = []; // 1: wall, 0: path
+    
+    // 迷路の初期化と生成 (穴掘り法)
+    function generateMaze() {
+      grid = Array(SIZE).fill(0).map(() => Array(SIZE).fill(1));
+      
+      const dig = (x, y) => {
+        grid[y][x] = 0;
+        const dirs = [ [0,-2], [0,2], [-2,0], [2,0] ].sort(() => Math.random() - 0.5);
+        for (let [dx, dy] of dirs) {
+          const nx = x + dx, ny = y + dy;
+          if (nx > 0 && nx < SIZE-1 && ny > 0 && ny < SIZE-1 && grid[ny][nx] === 1) {
+            grid[y + dy/2][x + dx/2] = 0;
+            dig(nx, ny);
+          }
+        }
+      };
+      dig(1, 1);
+      
+      // スタートとゴール
+      grid[1][1] = 0; // Start
+      grid[SIZE-2][SIZE-2] = 0; // Goal
+    }
+
+    function drawMaze() {
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+          if (grid[y][x] === 1) {
+            ctx.fillStyle = '#444'; // 壁
+            ctx.fillRect(x * CELL_W, y * CELL_H, CELL_W, CELL_H);
+          }
+        }
+      }
+      // スタート(緑)とゴール(赤)
+      ctx.fillStyle = '#0f0';
+      ctx.fillRect(1 * CELL_W, 1 * CELL_H, CELL_W, CELL_H);
+      ctx.fillStyle = '#f00';
+      ctx.fillRect((SIZE-2) * CELL_W, (SIZE-2) * CELL_H, CELL_W, CELL_H);
+    }
+
+    // 幅優先探索(BFS)で最短経路を求める
+    function solveMaze() {
+      const start = {x: 1, y: 1};
+      const goal = {x: SIZE-2, y: SIZE-2};
+      const queue = [ [start] ];
+      const visited = Array(SIZE).fill(0).map(() => Array(SIZE).fill(false));
+      visited[start.y][start.x] = true;
+
+      const dirs = [ [0,-1], [0,1], [-1,0], [1,0] ];
+      
+      while (queue.length > 0) {
+        const path = queue.shift();
+        const cur = path[path.length - 1];
+
+        if (cur.x === goal.x && cur.y === goal.y) {
+          return path;
+        }
+
+        for (let [dx, dy] of dirs) {
+          const nx = cur.x + dx, ny = cur.y + dy;
+          if (grid[ny][nx] === 0 && !visited[ny][nx]) {
+            visited[ny][nx] = true;
+            queue.push([...path, {x: nx, y: ny}]);
+          }
+        }
+      }
+      return [];
+    }
+
+    async function sendFrame() {
+      const dataURL = canvas.toDataURL('image/png');
+      await fetch(API + '/frame', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataURL })
+      });
+    }
+
+    async function runDemo() {
+      startBtn.disabled = true;
+      videoContainer.innerHTML = '';
+      
+      statusEl.textContent = '生成中...';
+      generateMaze();
+      drawMaze();
+      
+      const path = solveMaze();
+      if (path.length === 0) {
+        statusEl.textContent = 'エラー: ゴールに到達できません';
+        startBtn.disabled = false;
+        return;
+      }
+
+      statusEl.textContent = '録画開始...';
+      try {
+        await fetch(API + '/record/start', { method: 'POST' });
+        
+        // 初期状態を数フレーム録画
+        for(let i=0; i<3; i++) await sendFrame();
+
+        statusEl.textContent = '探索アニメーション録画中...';
+        
+        // アニメーションしながらフレーム送信
+        for (let i = 0; i < path.length; i++) {
+          const p = path[i];
+          // 軌跡を描画
+          ctx.fillStyle = '#0ff'; // シアン
+          ctx.fillRect(p.x * CELL_W + CELL_W*0.25, p.y * CELL_H + CELL_H*0.25, CELL_W*0.5, CELL_H*0.5);
+          
+          await sendFrame();
+          // 少し待つ（描画を画面に反映させるため）
+          await new Promise(r => setTimeout(r, 50)); 
+        }
+
+        // ゴール後の状態を数フレーム録画
+        for(let i=0; i<5; i++) await sendFrame();
+
+        statusEl.textContent = '動画エンコード中...';
+        const res = await fetch(API + '/record/stop', { method: 'POST' });
+        const data = await res.json();
+
+        if (data.ok) {
+          statusEl.textContent = '完了！動画を生成しました';
+          videoContainer.innerHTML = `
+            <h3>生成された動画:</h3>
+            <video src="${API}/videos/${data.file}" autoplay loop controls></video>
+            <p><a href="${API}/videos/${data.file}" target="_blank">${data.file}</a></p>
+          `;
+        } else {
+          statusEl.textContent = '動画の生成に失敗しました: ' + data.error;
+        }
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'エラーが発生しました: ' + err.message;
+      }
+
+      startBtn.disabled = false;
+    }
+
+    startBtn.addEventListener('click', runDemo);
+    
+    // 初期描画
+    generateMaze();
+    drawMaze();
+
+  </script>
+</body>
+</html>

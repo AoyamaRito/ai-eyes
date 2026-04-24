@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Deterministic nextFrame() Demo (v2)</title>
+  <style>
+    body { font-family: sans-serif; background: #222; color: #fff; display: flex; flex-direction: column; align-items: center; padding-top: 20px; }
+    canvas { background: #000; border: 2px solid #555; }
+    .info { margin: 10px; font-family: monospace; font-size: 16px; color: #0f0; }
+    #log { font-size: 12px; color: #888; background: #000; width: 400px; height: 100px; overflow-y: scroll; padding: 5px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+  <h1>nextFrame() 駆動デモ (v2)</h1>
+  <div id="error-display" style="color:red; font-weight:bold;"></div>
+  <div class="info">Frame: <span id="frame-count">0</span> | AI Input: <span id="last-input">None</span></div>
+  <canvas id="game" width="400" height="300"></canvas>
+  <div id="log"></div>
+
+  <script>
+    const API = location.origin; // 同じドメイン(localhost:3000)から取得
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const frameCountEl = document.getElementById('frame-count');
+    const lastInputEl = document.getElementById('last-input');
+    const logEl = document.getElementById('log');
+
+    function log(msg, isError = false) {
+      const div = document.createElement('div');
+      div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      if (isError) div.style.color = 'red';
+      logEl.prepend(div);
+    }
+
+    let state = {
+      frame: 0,
+      player: { x: 50, y: 250, vy: 0 },
+      obstacles: [{ x: 400, w: 30, h: 40 }],
+      gravity: 0.8,
+      jumpPower: -12,
+      groundY: 250,
+      speed: 5,
+      gameOver: false
+    };
+
+    function draw() {
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#444';
+      ctx.fillRect(0, state.groundY + 20, canvas.width, canvas.height - state.groundY);
+      ctx.fillStyle = '#f00';
+      state.obstacles.forEach(ob => ctx.fillRect(ob.x, state.groundY + 20 - ob.h, ob.w, ob.h));
+      ctx.fillStyle = state.gameOver ? '#555' : '#0f0';
+      ctx.fillRect(state.player.x, state.player.y, 20, 20);
+      frameCountEl.textContent = state.frame;
+    }
+
+    window.nextFrame = async function(inputStr) {
+      if (state.gameOver) return { status: 'game_over' };
+      const input = typeof inputStr === 'string' ? JSON.parse(inputStr) : (inputStr || {});
+      lastInputEl.textContent = JSON.stringify(input);
+
+      if (input.jump && state.player.y >= state.groundY) state.player.vy = state.jumpPower;
+      state.player.vy += state.gravity;
+      state.player.y += state.player.vy;
+      if (state.player.y > state.groundY) { state.player.y = state.groundY; state.player.vy = 0; }
+      state.obstacles.forEach(ob => ob.x -= state.speed);
+
+      state.frame++;
+      draw();
+
+      const dataURL = canvas.toDataURL('image/jpeg', 0.7);
+      try {
+        const res = await fetch(API + '/frame', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: dataURL })
+        });
+        if (!res.ok) log(`Frame failed: ${res.status}`, true);
+        
+        // スナップショットを送信して完了を通知
+        await fetch(API + '/snapshot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ html: 'done', label: `f_${state.frame}` })
+        });
+      } catch (e) {
+        log(`Error: ${e.message}`, true);
+      }
+      return { ok: true };
+    };
+
+    async function poll() {
+      try {
+        const res = await fetch(API + '/input/pending');
+        const json = await res.json();
+        if (json.hasCommand) {
+          const cmd = json.command;
+          if (cmd.action === 'eval') {
+            log(`Executing: ${cmd.code}`);
+            await eval(cmd.code);
+          }
+        }
+      } catch (e) {}
+      setTimeout(poll, 100); 
+    }
+
+    draw();
+    poll();
+    log("Ready.");
+  </script>
+</body>
+</html>
