@@ -293,9 +293,38 @@ function handleRequest(req, res) {
         res.writeHead(400); res.end('Invalid JSON');
       }
     });
+  } else if (req.method === 'POST' && urlPath === '/structure') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const filename = saveStructure(JSON.parse(body));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, file: filename }));
+      } catch (e) {
+        res.writeHead(400); res.end('Invalid JSON');
+      }
+    });
   } else if (req.method === 'GET' && urlPath === '/snapshots') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(listSnapshots(), null, 2));
+  } else if (req.method === 'GET' && urlPath === '/structures') {
+    if (!fs.existsSync(STRUCTURE_DIR)) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('[]'); return; }
+    const structs = fs.readdirSync(STRUCTURE_DIR)
+      .filter(f => f.endsWith('.json'))
+      .map(f => ({ name: f, time: fs.statSync(path.join(STRUCTURE_DIR, f)).mtime }))
+      .sort((a, b) => b.time - a.time);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(structs, null, 2));
+  } else if (req.method === 'GET' && urlPath.startsWith('/structures/')) {
+    const file = urlPath.replace('/structures/', '');
+    const filepath = path.join(STRUCTURE_DIR, file);
+    if (fs.existsSync(filepath)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(fs.readFileSync(filepath));
+    } else {
+      res.writeHead(404); res.end('Not Found');
+    }
   } else if (req.method === 'GET' && urlPath.startsWith('/snapshots/')) {
     const file = urlPath.replace('/snapshots/', '');
     const baseDir = path.resolve(SNAPSHOT_DIR);
@@ -309,9 +338,51 @@ function handleRequest(req, res) {
     }
   } else if (req.method === 'GET' && urlPath === '/client.js') {
     res.writeHead(200, { 'Content-Type': 'application/javascript' });
+    const host = req.headers.host || `localhost:${currentPort}`;
     const snippet = `
 (function() {
-  const SERVER = 'http://localhost:' + ${currentPort};
+  const SERVER = location.protocol + '//' + '${host}';
+  
+  // AI-Native Utility: 3D Projection Engine
+  const aiEyes = {
+    // 3D Point to 2D Screen Projection
+    project: (x, y, z, m) => {
+      const w = m[3] * x + m[7] * y + m[11] * z + m[15];
+      return {
+        x: (m[0] * x + m[4] * y + m[8] * z + m[12]) / w,
+        y: (m[1] * x + m[5] * y + m[9] * z + m[13]) / w,
+        z: (m[2] * x + m[6] * y + m[10] * z + m[14]) / w,
+        w: w
+      };
+    },
+    // Simple 4x4 Matrix Utils
+    mat4: {
+      identity: () => [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1],
+      perspective: (fovy, aspect, near, far) => {
+        const f = 1.0 / Math.tan(fovy / 2);
+        const nf = 1 / (near - far);
+        return [f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) * nf, -1, 0, 0, (2 * far * near) * nf, 0];
+      },
+      multiply: (a, b) => {
+        const out = new Float32Array(16);
+        for (let i = 0; i < 4; i++) {
+          for (let j = 0; j < 4; j++) {
+            out[i*4 + j] = a[i*4]*b[j] + a[i*4+1]*b[j+4] + a[i*4+2]*b[j+8] + a[i*4+3]*b[j+12];
+          }
+        }
+        return out;
+      }
+    },
+    sendStructure: (data) => {
+      fetch(SERVER + '/structure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }).catch(() => {});
+    }
+  };
+  window.aiEyes = aiEyes;
+
   function sendError(entry) {
     fetch(SERVER + '/error', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch(() => {});
   }
@@ -479,6 +550,7 @@ function tryListen(port, attempt = 1) {
 
   server.listen(port, () => {
     currentPort = port;
+    fs.writeFileSync('eyes.port', port.toString());
     console.log(`\n✓ ai-eyes running on http://localhost:${port}`);
     console.log(`  Static:    ${path.resolve(STATIC_DIR)}`);
     console.log(`  Log:       ${path.resolve(LOG_FILE)}`);
