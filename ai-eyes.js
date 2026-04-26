@@ -382,7 +382,9 @@ function handleRequest(req, res) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
-      }).catch(() => {});
+      }).catch(err => {
+        console.error('[aiEyes] sendStructure fetch error:', err.message);
+      });
     }
   };
   window.aiEyes = aiEyes;
