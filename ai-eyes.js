@@ -148,21 +148,21 @@ function listSnapshots() {
     .filter(f => f.endsWith('.html'))
     .map(f => ({
       name: f,
-      path: \`/snapshots/\${f}\`,
+      path: `/snapshots/${f}`,
       time: fs.statSync(path.join(SNAPSHOT_DIR, f)).mtime
-      }))
-      .sort((a, b) => b.time - a.time);
-      }
+    }))
+    .sort((a, b) => b.time - a.time);
+}
 
-      function saveStructure(data) {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `struct_${timestamp}.json`;
-      const filepath = path.join(STRUCTURE_DIR, filename);
-      fs.writeFileSync(filepath, JSON.stringify(data, null, 2));
-      console.error(`[${timestamp}] structure: Saved ${filename}`);
-      return filename;
-      }
-      // [/ai_s_emblem: SnapshotManager]
+function saveStructure(data) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `struct_${timestamp}.json`;
+  const filepath = path.join(STRUCTURE_DIR, filename);
+  fs.writeFileSync(filepath, JSON.stringify(data, null, 2));
+  console.error(`[${timestamp}] structure: Saved ${filename}`);
+  return filename;
+}
+// [/ai_s_emblem: SnapshotManager]
 
 // [ai_s_emblem:#high#logic VideoManager]
 let currentRecordingId = null;
