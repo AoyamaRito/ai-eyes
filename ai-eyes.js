@@ -357,37 +357,24 @@ function handleRequest(req, res) {
 (function() {
   const SERVER = location.protocol + '//' + '${host}';
   
-  // AI-Native Utility: 3D Projection Engine
+  // AI-Native Utility: 3D Projection Engine (Simplified for AI observation)
   const aiEyes = {
-    // 3D Point to 2D Screen Projection
-    project: (x, y, z, m) => {
-      const w = m[3] * x + m[7] * y + m[11] * z + m[15];
+    // Direct 3D Point to 2D Screen Projection (Focal length based)
+    project: (x, y, z, cameraZ = 5, fov = 90) => {
+      // Z distance from camera to the point
+      const distance = cameraZ - z;
+      if (distance <= 0) return { x: 0, y: 0, z, w: -1 }; // Behind camera
+      
+      const f = 1.0 / Math.tan((fov / 2) * (Math.PI / 180));
       return {
-        x: (m[0] * x + m[4] * y + m[8] * z + m[12]) / w,
-        y: (m[1] * x + m[5] * y + m[9] * z + m[13]) / w,
-        z: (m[2] * x + m[6] * y + m[10] * z + m[14]) / w,
-        w: w
+        x: (x * f) / distance,
+        y: (y * f) / distance,
+        z: z,
+        w: distance
       };
     },
-    // Simple 4x4 Matrix Utils
-    mat4: {
-      identity: () => [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1],
-      perspective: (fovy, aspect, near, far) => {
-        const f = 1.0 / Math.tan(fovy / 2);
-        const nf = 1 / (near - far);
-        return [f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) * nf, -1, 0, 0, (2 * far * near) * nf, 0];
-      },
-      multiply: (a, b) => {
-        const out = new Float32Array(16);
-        for (let i = 0; i < 4; i++) {
-          for (let j = 0; j < 4; j++) {
-            out[i*4 + j] = a[i*4]*b[j] + a[i*4+1]*b[j+4] + a[i*4+2]*b[j+8] + a[i*4+3]*b[j+12];
-          }
-        }
-        return out;
-      }
-    },
     sendStructure: (data) => {
+
       fetch(SERVER + '/structure', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
