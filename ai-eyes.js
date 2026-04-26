@@ -306,7 +306,8 @@ function handleRequest(req, res) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true, file: filename }));
       } catch (e) {
-        res.writeHead(400); res.end('Invalid JSON');
+        console.error(`[Server Error] /structure failed: ${e.message}`);
+        res.writeHead(400); res.end('Invalid JSON or Save Error');
       }
     });
   } else if (req.method === 'GET' && urlPath === '/snapshots') {
