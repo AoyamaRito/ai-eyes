@@ -13,6 +13,7 @@ const MAX_PORT_TRIES = 10;
 const LOG_FILE = process.env.LOG_FILE || 'error.log';
 const STATIC_DIR = process.env.STATIC_DIR || '.';
 const SNAPSHOT_DIR = process.env.SNAPSHOT_DIR || './snapshots';
+const STRUCTURE_DIR = path.join(SNAPSHOT_DIR, 'structures');
 const AUTO_KILL = process.argv.includes('--kill');
 
 const MIME_TYPES = {
@@ -30,6 +31,9 @@ const MIME_TYPES = {
 // Ensure snapshot directory exists
 if (!fs.existsSync(SNAPSHOT_DIR)) {
   fs.mkdirSync(SNAPSHOT_DIR, { recursive: true });
+}
+if (!fs.existsSync(STRUCTURE_DIR)) {
+  fs.mkdirSync(STRUCTURE_DIR, { recursive: true });
 }
 // [/ai_s_emblem: Config]
 
