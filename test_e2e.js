@@ -39,11 +39,11 @@ function assert(cond, msg) { if (!cond) throw new Error(msg); }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function runAllTests() {
-  console.log('=== ai-dev-server Unified E2E Tests ===\n');
+  console.log('=== ai-eyes Unified E2E Tests ===\n');
   if (!fs.existsSync(TEST_STATIC)) fs.mkdirSync(TEST_STATIC);
 
   // Start server
-  serverProc = spawn('node', ['ai-dev-server.js'], {
+  serverProc = spawn('node', ['ai-eyes.js'], {
     env: { ...process.env, PORT: PORT, LOG_FILE: TEST_LOG, SNAPSHOT_DIR: TEST_SNAPSHOTS, STATIC_DIR: TEST_STATIC },
     stdio: ['ignore', 'pipe', 'pipe']
   });
@@ -51,7 +51,7 @@ async function runAllTests() {
     const t = setTimeout(() => reject(new Error('Server start timeout')), 5000);
     serverProc.stderr.on('data', d => console.error('[Server Error]', d.toString()));
     serverProc.stdout.on('data', d => {
-      if (d.toString().includes('ai-dev-server running')) { clearTimeout(t); resolve(); }
+      if (d.toString().includes('ai-eyes running')) { clearTimeout(t); resolve(); }
     });
   });
 

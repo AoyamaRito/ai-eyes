@@ -1,10 +1,10 @@
 {
-  "name": "ai-dev-server",
+  "name": "ai-eyes",
   "version": "0.3.0",
-  "bin": { "ai-dev-server": "./ai-dev-server.js" },
+  "bin": { "ai-eyes": "./ai-eyes.js" },
   "scripts": {
-    "start": "node ai-dev-server.js",
-    "test": "node ai-dev-server.js --test",
+    "start": "node ai-eyes.js",
+    "test": "node ai-eyes.js --test",
     "test:e2e": "node test_e2e.js"
   }
 }

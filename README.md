@@ -1,4 +1,4 @@
-# ai-dev-server
+# ai-eyes
 
 > AIコーダーのためのゼロ依存デバッグサーバー
 
@@ -48,17 +48,8 @@ node ai_dev_server.js
 ### 2. HTMLにスニペット追加
 
 ```html
-<script>
-(function(){
-  const S='http://localhost:3000';
-  window.onerror=(m,s,l,c,e)=>{
-    fetch(S+'/error',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({type:'error',message:m,source:s,line:l,stack:e?.stack||''})});
-    fetch(S+'/snapshot',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({html:document.body.innerHTML,error:m,url:location.href})});
-  };
-})();
-</script>
+<!-- これだけでエラー収集、スナップショット、リモート操作が有効になります -->
+<script src="http://localhost:3000/client.js"></script>
 ```
 
 ### 3. AIがエラー確認

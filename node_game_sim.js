@@ -94,7 +94,7 @@ async function runSimulation() {
     execSync(`ffmpeg -y -framerate 30 -i "${TEMP_FRAMES}/frame_%05d.png" -c:v libx264 -pix_fmt yuv420p "${videoPath}"`);
     console.log(`\n🎉 SUCCESS! Video created: ${videoPath}`);
     
-    // ブラウザで専用プレイヤーを開く (ai-dev-server 経由)
+    // ブラウザで専用プレイヤーを開く (ai-eyes 経由)
     const playerUrl = `http://localhost:3000/player.html?video=${videoName}`;
     console.log(`🌐 Opening player: ${playerUrl}`);
     execSync(`open "${playerUrl}"`);

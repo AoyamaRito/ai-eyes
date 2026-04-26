@@ -307,6 +307,67 @@ function handleRequest(req, res) {
     } else {
       res.writeHead(404); res.end('Not Found');
     }
+  } else if (req.method === 'GET' && urlPath === '/client.js') {
+    res.writeHead(200, { 'Content-Type': 'application/javascript' });
+    const snippet = `
+(function() {
+  const SERVER = 'http://localhost:' + ${currentPort};
+  function sendError(entry) {
+    fetch(SERVER + '/error', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch(() => {});
+  }
+  function sendSnapshot(label) {
+    let styles = '';
+    try {
+      for (const sheet of document.styleSheets) {
+        try { for (const rule of sheet.cssRules) { styles += rule.cssText + '\\n'; } } catch (e) {}
+      }
+    } catch (e) {}
+    fetch(SERVER + '/snapshot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        html: document.body.innerHTML,
+        styles: styles,
+        url: location.href,
+        label: label || 'auto',
+        timestamp: new Date().toISOString()
+      })
+    }).catch(() => {});
+  }
+  window.onerror = function(msg, src, line, col, err) {
+    sendError({ type: 'error', message: msg, source: src, line: line, column: col, stack: err?.stack || '' });
+    sendSnapshot('Error: ' + msg);
+  };
+  window.onunhandledrejection = function(e) {
+    sendError({ type: 'unhandledrejection', message: e.reason?.message || String(e.reason), stack: e.reason?.stack || '' });
+    sendSnapshot('Promise Rejection');
+  };
+  const origConsoleError = console.error;
+  console.error = function(...args) {
+    sendError({ type: 'console.error', message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ') });
+    origConsoleError.apply(console, args);
+  };
+  setInterval(async () => {
+    try {
+      const res = await fetch(SERVER + '/input/pending');
+      const data = await res.json();
+      if (data.hasCommand) {
+        const cmd = data.command;
+        console.log('[Remote] Executing:', cmd.action);
+        if (cmd.action === 'eval') { await eval(cmd.code); }
+        else if (cmd.action === 'click') { document.querySelector(cmd.target)?.click(); }
+        else if (cmd.action === 'type') {
+          const el = document.querySelector(cmd.target);
+          if (el) { el.value = cmd.value; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }
+        }
+      }
+      const pendingRes = await fetch(SERVER + '/snapshot/pending');
+      const pendingData = await pendingRes.json();
+      if (pendingData.pending) { sendSnapshot(pendingData.label); }
+    } catch (e) {}
+  }, 500);
+})();`.trim();
+    res.end(snippet);
   } else if (req.method === 'GET' && urlPath === '/log') {
     if (!fs.existsSync(LOG_FILE)) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('[]'); return; }
     const entries = fs.readFileSync(LOG_FILE, 'utf8').trim().split('\n')
@@ -399,7 +460,7 @@ let currentPort = BASE_PORT;
 function tryListen(port, attempt = 1) {
   if (attempt > MAX_PORT_TRIES) {
     console.error(`ERROR: Could not find open port after ${MAX_PORT_TRIES} attempts (tried ${BASE_PORT}-${port - 1})`);
-    console.error(`Try: node ai-dev-server.js --kill`);
+    console.error(`Try: node ai-eyes.js --kill`);
     process.exit(1);
   }
 
@@ -418,7 +479,7 @@ function tryListen(port, attempt = 1) {
 
   server.listen(port, () => {
     currentPort = port;
-    console.log(`\n✓ ai-dev-server running on http://localhost:${port}`);
+    console.log(`\n✓ ai-eyes running on http://localhost:${port}`);
     console.log(`  Static:    ${path.resolve(STATIC_DIR)}`);
     console.log(`  Log:       ${path.resolve(LOG_FILE)}`);
     console.log(`  Snapshots: ${path.resolve(SNAPSHOT_DIR)}`);
@@ -546,7 +607,7 @@ function testCleanup() {
 }
 
 async function runE2ETests() {
-  console.log('=== ai-dev-server E2E Test ===\n');
+  console.log('=== ai-eyes E2E Test ===\n');
   testCleanup();
 
   let passed = 0, failed = 0;
@@ -563,7 +624,7 @@ async function runE2ETests() {
   await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error('Server start timeout')), 5000);
     serverProc.stdout.on('data', (d) => {
-      if (d.toString().includes('ai-dev-server running')) { clearTimeout(timeout); resolve(); }
+      if (d.toString().includes('ai-eyes running')) { clearTimeout(timeout); resolve(); }
     });
     serverProc.on('error', reject);
   });
@@ -606,10 +667,10 @@ async function runE2ETests() {
 // [ai_s_emblem:#high#entry Main]
 function showHelp() {
   console.log(`
-ai-dev-server v0.4.0 - Zero-dependency dev server with Remote Control
+ai-eyes v0.4.0 - Zero-dependency dev server with Remote Control
 
 USAGE:
-  node ai-dev-server.js [OPTIONS]
+  node ai-eyes.js [OPTIONS]
 
 OPTIONS:
   --help     Show this help
@@ -629,11 +690,11 @@ REMOTE CONTROL ENDPOINTS (For AI):
                          e.g. { "action": "type", "target": "#name", "value": "Test" }
 
 BROWSER SNIPPET (paste in your HTML):
-  (Run 'node ai-dev-server.js' and copy the <script> snippet from the code)
+  (Run 'node ai-eyes.js' and copy the <script> snippet from the code)
 
 EXAMPLES:
-  node ai-dev-server.js
-  node ai-dev-server.js --test
+  node ai-eyes.js
+  node ai-eyes.js --test
 
 REMOTE CONTROL (cURL):
   curl -X POST localhost:3000/input -H "Content-Type: application/json" -d '{"action":"eval","code":"console.log(\\"Hello from AI\\")"}'

@@ -8,9 +8,9 @@
 3. ループを自動化せよ
 ```
 
-## ai-dev-server の使い方（自律E2Eデバッグ）
+## ai-eyes の使い方（自律E2Eデバッグ）
 
-AIはPlaywrightのような重い依存なしに、`ai-dev-server`のREST API経由でブラウザを操作・観測できます。
+AIはPlaywrightのような重い依存なしに、`ai-eyes`のREST API経由でブラウザを操作・観測できます。
 
 ### 1. クライアント操作（アクション）
 ブラウザ内のUIを操作します。人間がクリックするのを待つ必要はありません。
@@ -95,12 +95,12 @@ ai-desk app.js skeleton
 ai-desk app.js focus $TARGET > /tmp/edit.js
 
 # 3. 編集して保存
-
 # 4. 適用
-ai-desk app.js apply /tmp/edit.js -w
+ai-desk app.js apply /tmp/edit.js
 
-# 5. git前に正規化
-ai-desk app.js restore -w
+# 5. 完了
+git status 等で変更を確認
+
 ```
 
 ## トークン効率の比較
@@ -124,7 +124,7 @@ ai-desk app.js restore -w
 ## 覚えるコマンド（最小セット）
 
 ```bash
-# ai-dev-server: 操作と観測
+# ai-eyes: 操作と観測
 curl -X POST localhost:3000/input -d '{"action":"click", "target":"#btn"}'
 curl -X POST localhost:3000/snapshot/request
 tail -1 error.log
